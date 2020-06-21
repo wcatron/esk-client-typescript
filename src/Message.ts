@@ -1,4 +1,4 @@
-import { TextDecoder, TextEncoder } from './utils'
+import { TextDecoder, TextEncoder } from './utils';
 
 export enum MessageCommand {
   CONNECT = 1,
@@ -8,81 +8,90 @@ export enum MessageCommand {
   SUBACK = 9,
   UNSUBSCRIBE = 10,
   UNSUBACK = 11,
-  INFORM = 103
+  INFORM = 103,
 }
 
 export class Message {
-  command: MessageCommand
-  topic?: string
-  data: Uint8Array
+  command: MessageCommand;
+  topic?: string;
+  data: Uint8Array;
   get payload(): string {
-    return new TextDecoder('utf-8').decode(this.data)
+    return new TextDecoder('utf-8').decode(this.data);
   }
   private _rawSubscribe() {
-    const topicArray = new TextEncoder().encode(this.topic)
-    const dataArray = this.data
-    const packageLength = 2 + topicArray.length + dataArray.length + 1
-    const packageBuffer = new Uint8Array(packageLength)
-    packageBuffer[0] = this.command
+    const topicArray = new TextEncoder().encode(this.topic);
+    const dataArray = this.data;
+    const packageLength = 2 + topicArray.length + dataArray.length + 1;
+    const packageBuffer = new Uint8Array(packageLength);
+    packageBuffer[0] = this.command;
     packageBuffer[1] = packageLength;
-    packageBuffer[2] = this.topic!.length
-    packageBuffer.set(topicArray, 3)
-    packageBuffer.set(dataArray, 3 + topicArray.length)
-    return packageBuffer
+    packageBuffer[2] = this.topic!.length;
+    packageBuffer.set(topicArray, 3);
+    packageBuffer.set(dataArray, 3 + topicArray.length);
+    return packageBuffer;
   }
-  get raw():Uint8Array {
-    switch(this.command) {
+  get raw(): Uint8Array {
+    switch (this.command) {
       case MessageCommand.PUBLISH:
       case MessageCommand.SUBSCRIBE:
       case MessageCommand.UNSUBSCRIBE:
-        return this._rawSubscribe()
+        return this._rawSubscribe();
       default:
-        console.info(this)
-        throw new Error('Unable to generate message of command type ' + this.command)
+        console.info(this);
+        throw new Error(
+          'Unable to generate message of command type ' + this.command
+        );
     }
   }
   constructor({
-    command, topic, data, payload
+    command,
+    topic,
+    data,
+    payload,
   }: {
-    command: MessageCommand,
-    topic?: string,
-    data?: Uint8Array,
-    payload?: string
+    command: MessageCommand;
+    topic?: string;
+    data?: Uint8Array;
+    payload?: string;
   }) {
-    this.command = command
-    this.topic = topic
+    this.command = command;
+    this.topic = topic;
     if (data) {
-      this.data = data
+      this.data = data;
     } else if (payload) {
-      this.data = new TextEncoder().encode(payload)
+      this.data = new TextEncoder().encode(payload);
     } else {
-      this.data = new Uint8Array()
+      this.data = new Uint8Array();
     }
   }
   static fromRaw(input: Uint8Array) {
-    const command = input[0]
-    switch(command) {
+    const command = input[0];
+    switch (command) {
       case MessageCommand.PUBLISH: {
-        const topicLength = input[2]
-        const topic = new TextDecoder('utf-8').decode(input.slice(3, 3 + topicLength))
+        const topicLength = input[2];
+        const topic = new TextDecoder('utf-8').decode(
+          input.slice(3, 3 + topicLength)
+        );
         return new Message({
           command,
           topic,
-          data: input.slice(3 + topicLength)
-        })
+          data: input.slice(3 + topicLength),
+        });
       }
       case MessageCommand.SUBACK:
       case MessageCommand.UNSUBACK: {
-        const topicLength = input[2]
-        const topic = new TextDecoder('utf-8').decode(input.slice(3, 3 + topicLength))
+        const topicLength = input[2];
+        const topic = new TextDecoder('utf-8').decode(
+          input.slice(3, 3 + topicLength)
+        );
         return new Message({
           command,
-          topic
-        })
+          topic,
+        });
       }
       default:
-        console.log(command + ": " +  new TextDecoder('utf-8').decode(input))
-        throw new Error('Command not setup in Message')
+        console.log(command + ': ' + new TextDecoder('utf-8').decode(input));
+        throw new Error('Command not setup in Message');
     }
   }
 }
