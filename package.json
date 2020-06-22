@@ -23,6 +23,9 @@
       "pre-commit": "tsdx lint"
     }
   },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "prettier": {
     "printWidth": 80,
     "semi": true,
