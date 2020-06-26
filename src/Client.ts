@@ -3,23 +3,36 @@ import { uint8ArrayFromBlob } from './utils';
 
 type ClientOptions = {
   url: string;
+  clientId?: string;
 };
 
 type ClientEventContext = { topic?: string };
 type ClientEventCallback = (context: ClientEventContext) => void;
-type ClientEvents = 'open' | 'close' | 'suback' | 'unsuback';
+type ClientEvents = 'open' | 'close' | 'suback' | 'unsuback' | 'connack';
 type ClientPublishCallback = (message: Message) => void;
 
 export class Client {
   socket: WebSocket;
   connected: boolean = false;
+  clientId?: string;
 
-  constructor({ url }: ClientOptions) {
+  constructor({ url, clientId }: ClientOptions) {
     this.socket = new WebSocket(url);
+    this.clientId = clientId;
     this.socket.onopen = () => {
+      console.log('client:open');
       this.connected = true;
-      this.callbacks['open'].map(value => value({}));
+      const message = new Message({
+        command: MessageCommand.CONNECT,
+        clientId: clientId,
+      });
+      this.publish(message);
+      this.wait('connack', () => {
+        this.callbacks['open'].map(value => value({}));
+        return true;
+      });
     };
+
     this.socket.onclose = () => {
       this.connected = false;
       this.callbacks['close'].map(value => value({}));
@@ -36,6 +49,7 @@ export class Client {
     }
     const dataArray = new Uint8Array(buffer);
     const message = Message.fromRaw(dataArray);
+    console.log('client:recieve:', message);
     if (message.topic && message.command === MessageCommand.PUBLISH) {
       const notify = this.topics.get(message.topic) || [];
       notify.forEach(callback => callback(message));
@@ -54,6 +68,15 @@ export class Client {
           topic: message.topic,
         })
       );
+    } else if (message.command === MessageCommand.CONNACK) {
+      console.log('client:connack:', message.clientId, ':', this.clientId);
+      if (this.clientId && this.clientId !== message.clientId) {
+        throw new Error(
+          "Client ID assigned by server does not match the client's requested clientId."
+        );
+      }
+      this.clientId = message.clientId;
+      this.callbacks['connack'].map(value => value({}));
     }
   }
 
@@ -62,6 +85,7 @@ export class Client {
     close: [],
     suback: [],
     unsuback: [],
+    connack: [],
   };
   topics: Map<string, ClientPublishCallback[]> = new Map();
 
@@ -136,6 +160,7 @@ export class Client {
       });
       return this.publish(message);
     }
+    console.log('client:publish:', topicOrMessage);
     this.socket.send(topicOrMessage.raw);
   }
 
