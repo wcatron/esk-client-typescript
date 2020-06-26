@@ -15,6 +15,7 @@ export class Message {
   command: MessageCommand;
   topic?: string;
   data: Uint8Array;
+  clientId?: string;
   get payload(): string {
     return new TextDecoder('utf-8').decode(this.data);
   }
@@ -30,8 +31,19 @@ export class Message {
     packageBuffer.set(dataArray, 3 + topicArray.length);
     return packageBuffer;
   }
+  private _rawConnect() {
+    const clientIdArray = new TextEncoder().encode(this.clientId);
+    const packageLength = 2 + clientIdArray.length;
+    const packageBuffer = new Uint8Array(packageLength);
+    packageBuffer[0] = this.command;
+    packageBuffer[1] = packageLength;
+    packageBuffer.set(clientIdArray, 2);
+    return packageBuffer;
+  }
   get raw(): Uint8Array {
     switch (this.command) {
+      case MessageCommand.CONNECT:
+        return this._rawConnect();
       case MessageCommand.PUBLISH:
       case MessageCommand.SUBSCRIBE:
       case MessageCommand.UNSUBSCRIBE:
@@ -48,14 +60,17 @@ export class Message {
     topic,
     data,
     payload,
+    clientId,
   }: {
     command: MessageCommand;
     topic?: string;
     data?: Uint8Array;
     payload?: string;
+    clientId?: string;
   }) {
     this.command = command;
     this.topic = topic;
+    this.clientId = clientId;
     if (data) {
       this.data = data;
     } else if (payload) {
@@ -67,6 +82,16 @@ export class Message {
   static fromRaw(input: Uint8Array) {
     const command = input[0];
     switch (command) {
+      case MessageCommand.CONNACK: {
+        const clientLength = input[1];
+        const clientId = new TextDecoder('utf-8').decode(
+          input.slice(2, 2 + clientLength)
+        );
+        return new Message({
+          command,
+          clientId,
+        });
+      }
       case MessageCommand.PUBLISH: {
         const topicLength = input[2];
         const topic = new TextDecoder('utf-8').decode(
