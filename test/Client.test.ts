@@ -33,22 +33,22 @@ describe('subscribe', () => {
     expect(client.callbacks.open).toHaveLength(0);
   });
   let callback: (message: Message) => void;
-  it('should send publish back to subscription', async done => {
+  it('should send inform back to subscription', async done => {
     callback = (message: Message) => {
-      expect(message.command).toBe(MessageCommand.PUBLISH);
+      expect(message.command).toBe(MessageCommand.INFORM);
       expect(JSON.parse(message.payload)).toEqual({
         test: 'value',
       });
       done();
     };
-    client.subscribe('/topic', callback).then(() => {
-      client.publish('/topic', {
+    client.subscribe(client.clientId + '/test', 0, callback).then(() => {
+      client.publish(client.clientId + '/test', {
         test: 'value',
       });
     });
   });
   it('should unsubscribe', async () => {
-    await client.unsubscribe('/topic', callback);
-    expect(client.topics.get('/topic')).toHaveLength(0);
+    await client.unsubscribe(client.clientId + '/test', callback);
+    expect(client.topics.get(client.clientId + '/test')).toHaveLength(0);
   });
 });
