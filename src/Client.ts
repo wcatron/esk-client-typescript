@@ -15,29 +15,55 @@ export class Client {
   socket: WebSocket;
   connected: boolean = false;
   clientId?: string;
+  reconnectInterval?: any;
 
   constructor({ url, clientId }: ClientOptions) {
-    this.socket = new WebSocket(url);
     this.clientId = clientId;
-    this.socket.onopen = () => {
+    this.socket = this.connect(url)
+  }
+
+  private connect(url: string, shouldResubscribe: boolean = false) {
+    const socket = new WebSocket(url);
+    socket.onopen = () => {
       console.log('client:open');
       this.connected = true;
       const message = new Message({
         command: MessageCommand.CONNECT,
-        clientId: clientId,
+        clientId: this.clientId,
       });
       this.publish(message);
       this.wait('connack', () => {
+        if (shouldResubscribe) {
+          for (var topic of this.topics.keys()) {
+            console.log('client:resubscribe:'+topic)
+            this.subscribe(topic, this.cursors.get(topic) || 0)
+          }
+        }
         this.callbacks['open'].map(value => value({}));
         return true;
       });
     };
 
-    this.socket.onclose = () => {
+    socket.onclose = (event) => {
+      console.log(`client:close:${event.code}`)
       this.connected = false;
+      // If not a normal closer
+      if (event.code !== 1000) {
+        this.reconnectInterval = setTimeout(() => {
+          console.log('client:close:Reconnecting in 5 seconds...');
+          this.socket = this.connect(url, true)
+        }, 5000)
+      }
       this.callbacks['close'].map(value => value({}));
     };
-    this.socket.onmessage = this.onmessage.bind(this);
+    
+    socket.onerror = (e) => {
+      console.log('client:error:', e)
+    }
+
+    socket.onmessage = this.onmessage.bind(this);
+
+    return socket;
   }
 
   async onmessage(event: MessageEvent) {
@@ -55,6 +81,7 @@ export class Client {
       notify.forEach(callback => callback(message));
     } else if (message.topic && message.command === MessageCommand.INFORM) {
       const notify = this.topics.get(message.topic) || [];
+      this.cursors.set(message.topic, (message.cursor || 0) + message.payload.length)
       notify.forEach(callback => callback(message));
     } else if (message.topic && message.command === MessageCommand.SUBACK) {
       this.callbacks['suback'].map(value =>
@@ -71,9 +98,7 @@ export class Client {
     } else if (message.command === MessageCommand.CONNACK) {
       console.log('client:connack:', message.clientId, ':', this.clientId);
       if (this.clientId && this.clientId !== message.clientId) {
-        throw new Error(
-          "Client ID assigned by server does not match the client's requested clientId."
-        );
+        console.warn("Client ID assigned by server does not match the client's requested clientId.")
       }
       this.clientId = message.clientId;
       this.callbacks['connack'].map(value => value({}));
@@ -88,6 +113,7 @@ export class Client {
     connack: [],
   };
   topics: Map<string, ClientPublishCallback[]> = new Map();
+  cursors: Map<string, number> = new Map();
 
   on(event: ClientEvents, callback: ClientEventCallback) {
     return this.callbacks[event].push(callback);
@@ -114,16 +140,18 @@ export class Client {
     });
   }
 
-  async subscribe(topic: string, callback: ClientPublishCallback) {
-    if (!this.topics.has(topic)) {
+  async subscribe(topic: string, cursor: number, callback?: ClientPublishCallback) {
+    if (!this.topics.has(topic) && callback) {
       this.topics.set(topic, [callback]);
-    } else {
+    } else if (callback) {
       this.topics.get(topic)!.push(callback);
     }
+    this.cursors.set(topic, cursor)
     this.publish(
       new Message({
         command: MessageCommand.SUBSCRIBE,
         topic: topic,
+        cursor
       })
     );
     await this.wait('suback', context => {
