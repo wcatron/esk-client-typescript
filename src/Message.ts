@@ -11,29 +11,28 @@ export enum MessageCommand {
   INFORM = 103,
 }
 
-function byteArrayFromInt (long: number, length: number) {
+function byteArrayFromInt(long: number, length: number) {
   // we want to represent the input as a 8-bytes array
   var byteArray = new Uint8Array(length);
-  for ( var index = 0; index < byteArray.length; index ++ ) {
-      var byte = long & 0xff;
-      byteArray [ index ] = byte;
-      long = (long - byte) / 256 ;
+  for (var index = 0; index < byteArray.length; index++) {
+    var byte = long & 0xff;
+    byteArray[index] = byte;
+    long = (long - byte) / 256;
   }
   return byteArray;
-};
-
+}
 
 function byteArrayToInt(array: Uint8Array) {
   var value = 0;
-  for ( var i = array.length - 1; i >= 0; i--) {
-      value = (value * 256) + array[i];
+  for (var i = array.length - 1; i >= 0; i--) {
+    value = value * 256 + array[i];
   }
   return value;
-};
+}
 
-const STANDARD_HEADER_LENGTH = 2 // command, restOfMessageLength
-const TOPIC_LENGTH = 2 // number of bytes to store the topic
-const WITH_TOPIC_HEADER = 2 + 8 // topic length, cursor
+const STANDARD_HEADER_LENGTH = 2; // command, restOfMessageLength
+const TOPIC_LENGTH = 2; // number of bytes to store the topic
+const WITH_TOPIC_HEADER = 2 + 8; // topic length, cursor
 
 export class Message {
   command: MessageCommand;
@@ -47,15 +46,21 @@ export class Message {
   private _rawSubscribe() {
     const topicArray = new TextEncoder().encode(this.topic);
     const dataArray = this.data;
-    const headerLength = STANDARD_HEADER_LENGTH + WITH_TOPIC_HEADER
-    const topicLength = topicArray.length
+    const headerLength = STANDARD_HEADER_LENGTH + WITH_TOPIC_HEADER;
+    const topicLength = topicArray.length;
     const packageLength = headerLength + topicLength + dataArray.length;
     const packageBuffer = new Uint8Array(packageLength);
     packageBuffer[0] = this.command;
     packageBuffer[1] = packageLength;
-    packageBuffer.set(byteArrayFromInt(this.topic!.length, TOPIC_LENGTH), STANDARD_HEADER_LENGTH);
-    packageBuffer.set(byteArrayFromInt(this.cursor || 0, 8), STANDARD_HEADER_LENGTH + TOPIC_LENGTH);
-    packageBuffer.set(topicArray, headerLength)
+    packageBuffer.set(
+      byteArrayFromInt(this.topic!.length, TOPIC_LENGTH),
+      STANDARD_HEADER_LENGTH
+    );
+    packageBuffer.set(
+      byteArrayFromInt(this.cursor || 0, 8),
+      STANDARD_HEADER_LENGTH + TOPIC_LENGTH
+    );
+    packageBuffer.set(topicArray, headerLength);
     packageBuffer.set(dataArray, headerLength + topicLength);
     return packageBuffer;
   }
@@ -89,7 +94,7 @@ export class Message {
     data,
     payload,
     clientId,
-    cursor
+    cursor,
   }: {
     command: MessageCommand;
     topic?: string;
@@ -124,9 +129,9 @@ export class Message {
         });
       }
       case MessageCommand.INFORM: {
-        const headerSize = 2 + 2 + 8
-        const topicLength = byteArrayToInt(input.slice(2,4));
-        const cursor = byteArrayToInt(input.slice(4,12));
+        const headerSize = 2 + 2 + 8;
+        const topicLength = byteArrayToInt(input.slice(2, 4));
+        const cursor = byteArrayToInt(input.slice(4, 12));
         const topic = new TextDecoder('utf-8').decode(
           input.slice(headerSize, headerSize + topicLength)
         );

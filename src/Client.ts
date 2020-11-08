@@ -19,7 +19,7 @@ export class Client {
 
   constructor({ url, clientId }: ClientOptions) {
     this.clientId = clientId;
-    this.socket = this.connect(url)
+    this.socket = this.connect(url);
   }
 
   private connect(url: string, shouldResubscribe: boolean = false) {
@@ -35,8 +35,8 @@ export class Client {
       this.wait('connack', () => {
         if (shouldResubscribe) {
           for (var topic of this.topics.keys()) {
-            console.log('client:resubscribe:'+topic)
-            this.subscribe(topic, this.cursors.get(topic) || 0)
+            console.log('client:resubscribe:' + topic);
+            this.subscribe(topic, this.cursors.get(topic) || 0);
           }
         }
         this.callbacks['open'].map(value => value({}));
@@ -44,22 +44,22 @@ export class Client {
       });
     };
 
-    socket.onclose = (event) => {
-      console.log(`client:close:${event.code}`)
+    socket.onclose = event => {
+      console.log(`client:close:${event.code}`);
       this.connected = false;
       // If not a normal closer
       if (event.code !== 1000) {
         this.reconnectInterval = setTimeout(() => {
           console.log('client:close:Reconnecting in 5 seconds...');
-          this.socket = this.connect(url, true)
-        }, 5000)
+          this.socket = this.connect(url, true);
+        }, 5000);
       }
       this.callbacks['close'].map(value => value({}));
     };
-    
-    socket.onerror = (e) => {
-      console.log('client:error:', e)
-    }
+
+    socket.onerror = e => {
+      console.log('client:error:', e);
+    };
 
     socket.onmessage = this.onmessage.bind(this);
 
@@ -81,7 +81,10 @@ export class Client {
       notify.forEach(callback => callback(message));
     } else if (message.topic && message.command === MessageCommand.INFORM) {
       const notify = this.topics.get(message.topic) || [];
-      this.cursors.set(message.topic, (message.cursor || 0) + message.payload.length)
+      this.cursors.set(
+        message.topic,
+        (message.cursor || 0) + message.payload.length
+      );
       notify.forEach(callback => callback(message));
     } else if (message.topic && message.command === MessageCommand.SUBACK) {
       this.callbacks['suback'].map(value =>
@@ -98,7 +101,9 @@ export class Client {
     } else if (message.command === MessageCommand.CONNACK) {
       console.log('client:connack:', message.clientId, ':', this.clientId);
       if (this.clientId && this.clientId !== message.clientId) {
-        console.warn("Client ID assigned by server does not match the client's requested clientId.")
+        console.warn(
+          "Client ID assigned by server does not match the client's requested clientId."
+        );
       }
       this.clientId = message.clientId;
       this.callbacks['connack'].map(value => value({}));
@@ -140,18 +145,22 @@ export class Client {
     });
   }
 
-  async subscribe(topic: string, cursor: number, callback?: ClientPublishCallback) {
+  async subscribe(
+    topic: string,
+    cursor: number,
+    callback?: ClientPublishCallback
+  ) {
     if (!this.topics.has(topic) && callback) {
       this.topics.set(topic, [callback]);
     } else if (callback) {
       this.topics.get(topic)!.push(callback);
     }
-    this.cursors.set(topic, cursor)
+    this.cursors.set(topic, cursor);
     this.publish(
       new Message({
         command: MessageCommand.SUBSCRIBE,
         topic: topic,
-        cursor
+        cursor,
       })
     );
     await this.wait('suback', context => {
